@@ -1,51 +1,53 @@
-package controllers
+package controller
 
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 
-	"github.com/sistemakreditasi/backend-akreditasi/utils"
-
+	"github.com/sistemakreditasi/backend-akreditasi/config"
+	"github.com/sistemakreditasi/backend-akreditasi/helper"
 	"github.com/sistemakreditasi/backend-akreditasi/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type Credential struct {
-	Status  bool   `json:"status"`
-	Message string `json:"message"`
-	Token   string `json:"token,omitempty"`
-}
-
-func Login(Privatekey, MongoEnv, dbname, Colname string, r *http.Request) string {
-	var resp Credential
-	mconn := utils.SetConnection(MongoEnv, dbname)
-	var dataadmin models.User
-	err := json.NewDecoder(r.Body).Decode(&dataadmin)
-	if err != nil {
-		resp.Message = "error parsing application/json: " + err.Error()
-		return utils.GCFReturnStruct(resp)
-	}
-
-	// Query ke MongoDB untuk mencocokkan email dan password
+// Fungsi login
+func Login(w http.ResponseWriter, r *http.Request) {
 	var user models.User
-	err = mconn.Collection(Colname).FindOne(r.Context(), bson.M{"email": dataadmin.Email}).Decode(&user)
-	if err == mongo.ErrNoDocuments || !utils.CheckPasswordHash(dataadmin.Password, user.Password) {
-		resp.Message = "Email atau password salah"
-		return utils.GCFReturnStruct(resp)
-	}
-
-	// Jika email dan password cocok, buat token JWT
-	tokenstring, err := utils.GenerateJWT(user.Email, user.Role, os.Getenv(Privatekey))
+	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
-		resp.Message = "Gagal Encode Token : " + err.Error()
-		return utils.GCFReturnStruct(resp)
+		http.Error(w, "Error decoding request body", http.StatusBadRequest)
+		return
 	}
 
-	// Sukses
-	resp.Status = true
-	resp.Message = "Selamat Datang " + user.Username
-	resp.Token = tokenstring
-	return utils.GCFReturnStruct(resp)
+	// Gunakan koneksi MongoDB dari config
+	db := config.Mongoconn
+	collection := db.Collection("users")
+
+	var foundUser models.User
+	err = collection.FindOne(r.Context(), bson.M{"email": user.Email}).Decode(&foundUser)
+	if err == mongo.ErrNoDocuments {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	} else if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if !helper.CheckPasswordHash(user.Password, foundUser.Password) {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
+
+	// Generate JWT token (gunakan fungsi CreateJWT dari helper)
+	token, err := helper.CreateJWT(foundUser.Email)
+	if err != nil {
+		http.Error(w, "Error creating token", http.StatusInternalServerError)
+		return
+	}
+
+	// Return the JWT token
+	json.NewEncoder(w).Encode(map[string]string{
+		"token": token,
+	})
 }

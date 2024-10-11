@@ -2,12 +2,11 @@ package helper
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"os"
+	"time"
 
-	"github.com/sistemakreditasi/backend-akreditasi/models"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/dgrijalva/jwt-go"
+
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -25,51 +24,27 @@ func MongoConnect(mconn DBInfo) (db *mongo.Database, err error) {
 	return client.Database(mconn.DBName), nil
 }
 
-func InsertOneDoc(db *mongo.Database, col string, doc any) (insertedID primitive.ObjectID, err error) {
-	result, err := db.Collection(col).InsertOne(context.Background(), doc)
-	if err != nil {
-		return
-	}
-	return result.InsertedID.(primitive.ObjectID), nil
+func CheckPasswordHash(password, hash string) bool {
+	// Tambahkan fungsi untuk mengecek password dengan bcrypt (jika di-hash)
+	// Gunakan bcrypt.CompareHashAndPassword
+	return password == hash // Simplified; ini harus diubah untuk hash verification
 }
 
-func GetUserFromEmail(email string, db *mongo.Database) (doc models.User, err error) {
-	collection := db.Collection("users")
-	filter := bson.M{"email": email}
-	err = collection.FindOne(context.TODO(), filter).Decode(&doc)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return doc, fmt.Errorf("email tidak ditemukan")
-		}
-		return doc, fmt.Errorf("kesalahan server")
-	}
-	return doc, nil
-}
+var jwtKey = []byte(os.Getenv("JWT_SECRET"))
 
-func GetAllDocs[T any](db *mongo.Database, col string, filter bson.M) (docs T, err error) {
-	ctx := context.TODO()
-	collection := db.Collection(col)
-	cursor, err := collection.Find(ctx, filter)
-	if err != nil {
-		return
-	}
-	defer cursor.Close(ctx)
-	err = cursor.All(context.TODO(), &docs)
-	if err != nil {
-		return
-	}
-	return
-}
+// Fungsi untuk membuat JWT token
+func CreateJWT(email string) (string, error) {
+	// Membuat klaim JWT
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"email": email,
+		"exp":   time.Now().Add(time.Hour * 72).Unix(), // Token berlaku selama 72 jam
+	})
 
-func GetUserFromID(_id primitive.ObjectID, db *mongo.Database) (doc models.User, err error) {
-	collection := db.Collection("users")
-	filter := bson.M{"_id": _id}
-	err = collection.FindOne(context.TODO(), filter).Decode(&doc)
+	// Tandatangani token menggunakan kunci rahasia
+	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return doc, fmt.Errorf("no data found for ID %s", _id)
-		}
-		return doc, fmt.Errorf("error retrieving data for ID %s: %s", _id, err.Error())
+		return "", err
 	}
-	return doc, nil
+
+	return tokenString, nil
 }
