@@ -1,0 +1,32 @@
+name: Google Cloud Function Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  Deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: GCP Authentication
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Function
+        run: |
+          gcloud functions deploy sistem-akreditasi-backend \
+            --region=asia-southeast2 \
+            --allow-unauthenticated \
+            --entry-point=Login \
+            --runtime=go122 \
+            --trigger-http \
+            --set-env-vars MONGOSTRING='${{ secrets.MONGOSTRING }}',JWT_SECRET='${{ secrets.JWT_SECRET }}'
