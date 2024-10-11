@@ -6,7 +6,6 @@ require (
 	aidanwoods.dev/go-paseto v1.5.2
 	github.com/aiteung/atdb v0.1.7
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/gorilla/mux v1.8.1
 	go.mongodb.org/mongo-driver v1.17.1
 	google.golang.org/api v0.200.0
 )
