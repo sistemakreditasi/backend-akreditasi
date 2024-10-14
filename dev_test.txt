@@ -1,0 +1,15 @@
+// package backend_test
+
+// import (
+// 	"testing"
+
+// 	"github.com/sistemakreditasi/backend-akreditasi/helper"
+// )
+
+// // var db = module.MongoConnect("MONGOSTRING", "sistemakreditasi")
+
+// func TestGenerateKey(t *testing.T) {
+// 	privateKey, publicKey := helper.GenerateKey()
+// 	t.Logf("PrivateKey : %v", privateKey)
+// 	t.Logf("PublicKey : %v", publicKey)
+// }
