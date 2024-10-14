@@ -37,7 +37,8 @@ func URL(w http.ResponseWriter, r *http.Request) {
 // Home function is just a simple handler for root URL
 func Home(respw http.ResponseWriter, req *http.Request) {
 	resp := map[string]string{
-		"message": "Welcome to the PDF Service",
+		"github_repo": "github.com/sistemakreditasi/backend-akreditasi",
+		"message":     "halohalo haihai",
 	}
 	helper.WriteJSON(respw, http.StatusOK, resp)
 }
