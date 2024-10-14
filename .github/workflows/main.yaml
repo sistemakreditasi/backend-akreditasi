@@ -42,7 +42,7 @@ jobs:
           gcloud functions deploy sistemakreditasi \
             --region=asia-southeast2 \
             --allow-unauthenticated \
-            --entry-point=Webhook \
+            --entry-point=WebHook \
             --gen2 \
             --runtime=go122 \
             --trigger-http \
