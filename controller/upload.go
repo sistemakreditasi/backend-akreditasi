@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/sistemakreditasi/backend-akreditasi/config"
@@ -32,10 +33,18 @@ func UploadPDF(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Connect to Google Drive
+	// Connect to Google Drive using environment variable for credentials
 	ctx := context.Background()
-	driveService, err := drive.NewService(ctx, option.WithCredentialsFile("path/to/credentials.json"))
+	credentials := os.Getenv("GOOGLE_CREDENTIALS")
+	if credentials == "" {
+		http.Error(w, "Google credentials are missing", http.StatusInternalServerError)
+		return
+	}
+
+	// Initialize Google Drive service
+	driveService, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(credentials)))
 	if err != nil {
+		fmt.Printf("Google Drive connection error: %v\n", err)
 		http.Error(w, "Unable to connect to Google Drive", http.StatusInternalServerError)
 		return
 	}
@@ -44,6 +53,7 @@ func UploadPDF(w http.ResponseWriter, r *http.Request) {
 	driveFile := &drive.File{Name: handler.Filename, MimeType: "application/pdf"}
 	uploadedFile, err := driveService.Files.Create(driveFile).Media(file).Do()
 	if err != nil {
+		fmt.Printf("Error uploading to Google Drive: %v\n", err)
 		http.Error(w, "Failed to upload file to Google Drive", http.StatusInternalServerError)
 		return
 	}
@@ -53,15 +63,16 @@ func UploadPDF(w http.ResponseWriter, r *http.Request) {
 		ID:         primitive.NewObjectID(),
 		FileName:   handler.Filename,
 		FileID:     uploadedFile.Id,
-		UploadedBy: "user@example.com", // Replace with actual user
+		UploadedBy: "user@example.com", // Replace with actual user, can be taken from JWT or request context
 		UploadedAt: primitive.NewDateTimeFromTime(time.Now()),
 	}
 
-	// Akses collection pada MongoDB langsung menggunakan config.Mongoconn
+	// Access MongoDB collection
 	collection := config.Mongoconn.Collection("pdf_documents")
 
 	_, err = collection.InsertOne(ctx, pdfDocument)
 	if err != nil {
+		fmt.Printf("Error saving metadata to MongoDB: %v\n", err)
 		http.Error(w, "Failed to save document metadata", http.StatusInternalServerError)
 		return
 	}
@@ -80,10 +91,18 @@ func DownloadPDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Connect to Google Drive
+	// Connect to Google Drive using environment variable for credentials
 	ctx := context.Background()
-	driveService, err := drive.NewService(ctx, option.WithCredentialsFile("path/to/credentials.json"))
+	credentials := os.Getenv("GOOGLE_CREDENTIALS")
+	if credentials == "" {
+		http.Error(w, "Google credentials are missing", http.StatusInternalServerError)
+		return
+	}
+
+	// Initialize Google Drive service
+	driveService, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(credentials)))
 	if err != nil {
+		fmt.Printf("Google Drive connection error: %v\n", err)
 		http.Error(w, "Unable to connect to Google Drive", http.StatusInternalServerError)
 		return
 	}
@@ -91,6 +110,7 @@ func DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	// Retrieve the file from Google Drive
 	resp, err := driveService.Files.Get(fileID).Download()
 	if err != nil {
+		fmt.Printf("Error downloading from Google Drive: %v\n", err)
 		http.Error(w, "Failed to download file from Google Drive", http.StatusInternalServerError)
 		return
 	}
@@ -103,6 +123,7 @@ func DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	// Stream the file content to the client
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
+		fmt.Printf("Error sending file to client: %v\n", err)
 		http.Error(w, "Failed to send file", http.StatusInternalServerError)
 	}
 }
