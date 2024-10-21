@@ -1,0 +1,86 @@
+// package test
+
+// import (
+// 	"bytes"
+// 	"encoding/json"
+// 	"net/http"
+// 	"testing"
+// )
+
+// // Helper function for making HTTP requests
+// func makeRequest(t *testing.T, method, url string, payload any) (*http.Response, error) {
+// 	jsonData, err := json.Marshal(payload)
+// 	if err != nil {
+// 		t.Fatalf("Error marshaling payload: %v", err)
+// 	}
+
+// 	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonData))
+// 	if err != nil {
+// 		t.Fatalf("Error creating request: %v", err)
+// 	}
+
+// 	req.Header.Set("Content-Type", "application/json")
+// 	client := &http.Client{}
+// 	return client.Do(req)
+// }
+
+// // Test for registration
+// func TestRegister(t *testing.T) {
+// 	user := map[string]string{
+// 		"username": "TestUser",
+// 		"email":    "testuser@example.com",
+// 		"password": "password123",
+// 		"role":     "dosen",
+// 	}
+
+// 	resp, err := makeRequest(t, http.MethodPost, "https://asia-southeast2-sistemakreditasi.cloudfunctions.net/sistemakreditasi/register", user)
+// 	if err != nil {
+// 		t.Fatalf("Error during registration: %v", err)
+// 	}
+
+// 	if resp.StatusCode != http.StatusCreated {
+// 		t.Errorf("Expected status %d, got %d", http.StatusCreated, resp.StatusCode)
+// 	}
+// }
+
+// // Test for login
+// func TestLogin(t *testing.T) {
+// 	credentials := map[string]string{
+// 		"email":    "testuser@example.com",
+// 		"password": "password123",
+// 	}
+
+// 	resp, err := makeRequest(t, http.MethodPost, "http://localhost:8080/login", credentials)
+// 	if err != nil {
+// 		t.Fatalf("Error during login: %v", err)
+// 	}
+
+// 	if resp.StatusCode != http.StatusOK {
+// 		t.Errorf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
+// 	}
+// }
+
+// // Test for file upload
+// func TestUpload(t *testing.T) {
+// 	// Use a proper multipart request for testing file uploads
+// 	resp, err := makeRequest(t, http.MethodPost, "http://localhost:8080/upload", nil)
+// 	if err != nil {
+// 		t.Fatalf("Error during upload: %v", err)
+// 	}
+
+// 	if resp.StatusCode != http.StatusOK {
+// 		t.Errorf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
+// 	}
+// }
+
+// // Test for file download
+// func TestDownload(t *testing.T) {
+// 	resp, err := makeRequest(t, http.MethodGet, "http://localhost:8080/download?file_id=example-file-id", nil)
+// 	if err != nil {
+// 		t.Fatalf("Error during download: %v", err)
+// 	}
+
+// 	if resp.StatusCode != http.StatusOK {
+// 		t.Errorf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
+// 	}
+// }
