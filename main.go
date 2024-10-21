@@ -1,4 +1,4 @@
-package teeamai
+package akreditas
 
 import (
 	"github.com/sistemakreditasi/backend-akreditasi/routes"
