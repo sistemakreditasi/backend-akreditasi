@@ -29,6 +29,8 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		controller.DownloadPDF(w, r)
 	case method == "POST" && path == "/login":
 		controller.Login(w, r)
+	case method == "POST" && path == "/register":
+		controller.Register(w, r)
 	default:
 		helper.ErrorResponse(w, r, http.StatusNotFound, "Not Found", "The requested resource was not found")
 	}
