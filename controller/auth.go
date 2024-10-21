@@ -1,53 +1,80 @@
 package controller
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 
-	"github.com/sistemakreditasi/backend-akreditasi/config"
+	"github.com/badoux/checkmail"
 	"github.com/sistemakreditasi/backend-akreditasi/helper"
-	"github.com/sistemakreditasi/backend-akreditasi/models"
+	"github.com/sistemakreditasi/backend-akreditasi/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/argon2"
 )
 
-// Fungsi login
-func Login(w http.ResponseWriter, r *http.Request) {
-	var user models.User
-	err := json.NewDecoder(r.Body).Decode(&user)
+// Login handles user login
+func Login(db *mongo.Database, respw http.ResponseWriter, req *http.Request, privatekey string) {
+	var user model.User
+	err := json.NewDecoder(req.Body).Decode(&user)
 	if err != nil {
-		http.Error(w, "Error decoding request body", http.StatusBadRequest)
+		helper.ErrorResponse(respw, req, http.StatusBadRequest, "Bad Request", "error parsing request body: "+err.Error())
 		return
 	}
 
-	// Gunakan koneksi MongoDB dari config
-	db := config.Mongoconn
-	collection := db.Collection("users")
+	// Validasi input
+	if user.Email == "" || user.Password == "" {
+		helper.ErrorResponse(respw, req, http.StatusBadRequest, "Bad Request", "mohon untuk melengkapi data")
+		return
+	}
 
-	var foundUser models.User
-	err = collection.FindOne(r.Context(), bson.M{"email": user.Email}).Decode(&foundUser)
+	// Validasi format email
+	if err = checkmail.ValidateFormat(user.Email); err != nil {
+		helper.ErrorResponse(respw, req, http.StatusBadRequest, "Bad Request", "email tidak valid")
+		return
+	}
+
+	// Cek apakah email ada di database
+	var foundUser model.User
+	err = db.Collection("users").FindOne(req.Context(), bson.M{"email": user.Email}).Decode(&foundUser)
 	if err == mongo.ErrNoDocuments {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		helper.ErrorResponse(respw, req, http.StatusUnauthorized, "Unauthorized", "email atau password salah")
 		return
 	} else if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		helper.ErrorResponse(respw, req, http.StatusInternalServerError, "Internal Server Error", "kesalahan server: get email "+err.Error())
 		return
 	}
 
-	if !helper.CheckPasswordHash(user.Password, foundUser.Password) {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
-		return
-	}
-
-	// Generate JWT token (gunakan fungsi CreateJWT dari helper)
-	token, err := helper.CreateJWT(foundUser.Email)
+	// Decode salt dari string
+	salt, err := hex.DecodeString(foundUser.Salt)
 	if err != nil {
-		http.Error(w, "Error creating token", http.StatusInternalServerError)
+		helper.ErrorResponse(respw, req, http.StatusInternalServerError, "Internal Server Error", "kesalahan server: salt")
 		return
 	}
 
-	// Return the JWT token
-	json.NewEncoder(w).Encode(map[string]string{
-		"token": token,
-	})
+	// Hash password menggunakan salt
+	hash := argon2.IDKey([]byte(user.Password), salt, 1, 64*1024, 4, 32)
+	if hex.EncodeToString(hash) != foundUser.Password {
+		helper.ErrorResponse(respw, req, http.StatusUnauthorized, "Unauthorized", "password salah")
+		return
+	}
+
+	// Jika menggunakan token, generate token di sini
+	tokenstring, err := helper.Encode(foundUser.ID, foundUser.Email, privatekey)
+	if err != nil {
+		helper.ErrorResponse(respw, req, http.StatusInternalServerError, "Internal Server Error", "kesalahan server: token")
+		return
+	}
+
+	// Berhasil login, kirim response
+	resp := map[string]interface{}{
+		"status":  "success",
+		"message": "login berhasil",
+		"token":   tokenstring,
+		"data": map[string]string{
+			"email": foundUser.Email,
+			"role":  foundUser.Role,
+		},
+	}
+	helper.WriteJSON(respw, http.StatusOK, resp)
 }
