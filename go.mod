@@ -6,9 +6,11 @@ require (
 	aidanwoods.dev/go-paseto v1.5.2
 	github.com/GoogleCloudPlatform/functions-framework-go v1.9.0
 	github.com/aiteung/atdb v0.1.7
+	github.com/badoux/checkmail v1.2.4
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	go.mongodb.org/mongo-driver v1.17.1
-	google.golang.org/api v0.200.0
+	golang.org/x/crypto v0.28.0
+	google.golang.org/api v0.201.0
 )
 
 require (
@@ -47,7 +49,6 @@ require (
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.10.0 // indirect
-	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
