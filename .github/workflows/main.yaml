@@ -49,7 +49,7 @@ jobs:
           gcloud functions deploy sistemakreditasi \
             --region=asia-southeast2 \
             --allow-unauthenticated \
-            --entry-point=UploadPDF \ # Sesuaikan dengan nama fungsi yang kamu gunakan
+            --entry-point=WebHook \ # Sesuaikan dengan nama fungsi yang kamu gunakan
             --gen2 \
             --runtime=go122 \
             --trigger-http \
