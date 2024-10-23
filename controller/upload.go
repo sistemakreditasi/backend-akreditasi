@@ -16,7 +16,7 @@ import (
 // Fungsi untuk membuat service Google Drive
 func getDriveService() (*drive.Service, error) {
 	ctx := context.Background()
-	srv, err := drive.NewService(ctx, option.WithCredentialsFile("path/to/credentials.json"))
+	srv, err := drive.NewService(ctx, option.WithCredentialsFile("credentials.json"))
 	if err != nil {
 		return nil, fmt.Errorf("tidak dapat membuat service: %v", err) // Ubah huruf kapital menjadi huruf kecil
 	}
