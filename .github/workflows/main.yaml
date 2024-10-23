@@ -10,27 +10,40 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Checkout repository
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
+      # Step 2: Check secrets
       - name: Check secrets
         run: |
           echo "Length of GOOGLE_CREDENTIALS: ${#GOOGLE_CREDENTIALS}"
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
 
+      # Step 3: GCP Authentication using secrets
       - name: GCP Authentication
         id: "auth"
         uses: google-github-actions/auth@v2
         with:
           credentials_json: "${{ secrets.GOOGLE_CREDENTIALS }}"
 
+      # Step 4: Debug GCP credentials
+      - name: Debug GCP credentials
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: |
+          echo "$GOOGLE_APPLICATION_CREDENTIALS" > credentials.json
+
+      # Step 5: Set up Cloud SDK
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      # Step 6: Use gcloud CLI (for debugging)
       - name: Use gcloud CLI
         run: "gcloud info"
 
+      # Step 7: Deploy the Cloud Function with environment variables
       - name: Deploy a gen 2 cloud function
         run: |
           gcloud functions deploy sistemakreditasi \
@@ -41,20 +54,16 @@ jobs:
             --runtime=go122 \
             --trigger-http \
             --timeout=540s \
-            --set-env-vars=GOOGLE_CREDENTIALS='${{ secrets.GOOGLE_CREDENTIALS }}' \
-            --set-env-vars=MONGOSTRING='${{ secrets.MONGOSTRING }}' \
-            --set-env-vars=JWT_SECRET='${{ secrets.JWT_SECRET }}' \
-            --set-env-vars=PRIVATEKEY='${{ secrets.PRIVATEKEY }}' \
-            --set-env-vars=PUBLICKEY='${{ secrets.PUBLICKEY }}'
+            --set-env-vars=MONGOSTRING='${{ secrets.MONGOSTRING }}',JWT_SECRET='${{ secrets.JWT_SECRET }}',PRIVATEKEY='${{ secrets.PRIVATEKEY }}',PUBLICKEY='${{ secrets.PUBLICKEY }}',GOOGLE_CREDENTIALS="{\"type\":\"service_account\",\"project_id\":\"your-project-id\",\"private_key_id\":\"your-private-key-id\",\"private_key\":\"-----BEGIN PRIVATE KEY-----\\nABC123...\\n-----END PRIVATE KEY-----\\n\",\"client_email\":\"your-client-email@your-project-id.iam.gserviceaccount.com\",\"client_id\":\"1234567890\",\"auth_uri\":\"https://accounts.google.com/o/oauth2/auth\",\"token_uri\":\"https://oauth2.googleapis.com/token\",\"auth_provider_x509_cert_url\":\"https://www.googleapis.com/oauth2/v1/certs\",\"client_x509_cert_url\":\"https://www.googleapis.com/robot/v1/metadata/x509/your-client-email@your-project-id.iam.gserviceaccount.com\"}"
 
+      # Step 8: Cek eksistensi fungsi yang ter-deploy
       - name: Cek eksistensi fungsi
-        run: |
-          gcloud functions describe sistemakreditasi --region=asia-southeast2
+        run: "gcloud functions describe sistemakreditasi --region=asia-southeast2"
 
+      # Step 9: Cek log debugging Cloud Function
       - name: Cek log debugging
-        run: |
-          gcloud functions logs read sistemakreditasi --region=asia-southeast2 --limit=50
+        run: "gcloud functions logs read sistemakreditasi --region=asia-southeast2"
 
+      # Step 10: Cleaning Artifact Registry (opsional jika diperlukan)
       - name: Cleaning Artifact Registry
-        run: |
-          gcloud artifacts repositories delete gcf-artifacts --location=asia-southeast2 --quiet
+        run: "gcloud artifacts repositories delete gcf-artifacts --location=asia-southeast2 --quiet"
