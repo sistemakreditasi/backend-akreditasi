@@ -9,73 +9,81 @@ import (
 	"os"
 	"time"
 
-	"github.com/sistemakreditasi/backend-akreditasi/config"
 	"github.com/sistemakreditasi/backend-akreditasi/helper"
 	"github.com/sistemakreditasi/backend-akreditasi/model"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 )
 
-// UploadPDF handles the uploading of a PDF file to Google Drive and saves metadata to MongoDB
 func UploadPDF(w http.ResponseWriter, r *http.Request) {
-	// Parse the form to retrieve the uploaded file
-	err := r.ParseMultipartForm(10 << 20) // limit file size to 10MB
+	// Parse form to retrieve uploaded file
+	err := r.ParseMultipartForm(10 << 20) // 10MB max
 	if err != nil {
-		helper.ErrorResponse(w, r, http.StatusBadRequest, "Bad Request", "File terlalu besar")
+		http.Error(w, "File terlalu besar", http.StatusBadRequest)
 		return
 	}
 
-	// Get file from the form
+	// Get file from form
 	file, handler, err := r.FormFile("pdf")
 	if err != nil {
-		helper.ErrorResponse(w, r, http.StatusBadRequest, "Bad Request", "error retrieving the file")
+		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	// Connect to Google Drive using environment variable for credentials
-	ctx := context.Background()
+	// Google Drive credentials
 	credentials := os.Getenv("GOOGLE_CREDENTIALS")
 	if credentials == "" {
-		helper.ErrorResponse(w, r, http.StatusInternalServerError, "Internal Server Error", "Google credentials are missing")
+		http.Error(w, "Google credentials are missing", http.StatusInternalServerError)
 		return
 	}
 
-	// Initialize Google Drive service
+	// Connect to Google Drive
+	ctx := context.Background()
 	driveService, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(credentials)))
 	if err != nil {
-		helper.ErrorResponse(w, r, http.StatusInternalServerError, "Internal Server Error", "Unable to connect to Google Drive")
+		http.Error(w, "Unable to connect to Google Drive", http.StatusInternalServerError)
 		return
 	}
 
-	// Create a new file in Google Drive
+	// Upload file to Google Drive
 	driveFile := &drive.File{Name: handler.Filename, MimeType: "application/pdf"}
 	uploadedFile, err := driveService.Files.Create(driveFile).Media(file).Do()
 	if err != nil {
-		helper.ErrorResponse(w, r, http.StatusInternalServerError, "Internal Server Error", "Failed to upload file to Google Drive")
+		http.Error(w, "Failed to upload file to Google Drive", http.StatusInternalServerError)
 		return
 	}
+
+	// Connect to MongoDB
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("MONGOSTRING")))
+	if err != nil {
+		http.Error(w, "Failed to connect to MongoDB", http.StatusInternalServerError)
+		return
+	}
+	defer client.Disconnect(ctx)
+
+	collection := client.Database("db_akreditasi").Collection("pdf_documents")
 
 	// Save PDF metadata to MongoDB
 	pdfDocument := model.PDFDocument{
 		ID:         primitive.NewObjectID(),
 		FileName:   handler.Filename,
 		FileID:     uploadedFile.Id,
-		UploadedBy: "user@example.com", // Replace with actual user from JWT or request context
-		UploadedAt: primitive.NewDateTimeFromTime(time.Now()),
+		UploadedBy: "user@example.com", // Bisa diganti dengan user dari JWT/token
+		UploadedAt: time.Now(),
 	}
-
-	// Access MongoDB collection
-	collection := config.Mongoconn.Collection("pdf_documents")
 
 	_, err = collection.InsertOne(ctx, pdfDocument)
 	if err != nil {
-		helper.ErrorResponse(w, r, http.StatusInternalServerError, "Internal Server Error", "Failed to save document metadata")
+		http.Error(w, "Failed to save document metadata", http.StatusInternalServerError)
 		return
 	}
 
-	// Respond with the uploaded file metadata
+	// Respond with uploaded file metadata
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(pdfDocument)
 }
