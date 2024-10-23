@@ -2,134 +2,120 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"time"
+	"path/filepath"
 
 	"github.com/sistemakreditasi/backend-akreditasi/helper"
-	"github.com/sistemakreditasi/backend-akreditasi/model"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 )
 
-func UploadPDF(w http.ResponseWriter, r *http.Request) {
-	// Parse form untuk mengakses file yang diupload
-	err := r.ParseMultipartForm(10 << 20) // Max 10MB
+// Fungsi untuk membuat service Google Drive
+func getDriveService() (*drive.Service, error) {
+	ctx := context.Background()
+	srv, err := drive.NewService(ctx, option.WithCredentialsFile("path/to/credentials.json"))
 	if err != nil {
-		http.Error(w, "File terlalu besar", http.StatusBadRequest)
+		return nil, fmt.Errorf("tidak dapat membuat service: %v", err) // Ubah huruf kapital menjadi huruf kecil
+	}
+	return srv, nil
+}
+
+// Fungsi untuk mengunggah file ke Google Drive
+func UploadPDF(respw http.ResponseWriter, req *http.Request) {
+	// Parse form untuk mendapatkan file yang diunggah
+	err := req.ParseMultipartForm(10 << 20) // batas maksimal 10 MB
+	if err != nil {
+		http.Error(respw, "Gagal mem-parsing form", http.StatusBadRequest)
 		return
 	}
 
-	// Mengambil file dari form
-	file, handler, err := r.FormFile("pdf")
+	file, handler, err := req.FormFile("file")
 	if err != nil {
-		http.Error(w, "Error saat mengambil file", http.StatusBadRequest)
+		http.Error(respw, "Tidak ada file yang diunggah", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	// Mendapatkan kredensial Google dari environment variable
-	credentials := os.Getenv("GOOGLE_CREDENTIALS")
-	if credentials == "" {
-		http.Error(w, "Google credentials tidak ditemukan", http.StatusInternalServerError)
-		return
-	}
-
-	// Inisialisasi layanan Google Drive
-	ctx := context.Background()
-	driveService, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(credentials)))
+	// Simpan file sementara ke server
+	savePath := filepath.Join(os.TempDir(), handler.Filename)
+	tempFile, err := os.Create(savePath)
 	if err != nil {
-		http.Error(w, "Tidak bisa menghubungkan ke Google Drive", http.StatusInternalServerError)
+		http.Error(respw, "Gagal menyimpan file", http.StatusInternalServerError)
+		return
+	}
+	defer tempFile.Close()
+
+	// Salin konten file yang diunggah ke file sementara
+	_, err = io.Copy(tempFile, file)
+	if err != nil {
+		http.Error(respw, "Gagal menyimpan file", http.StatusInternalServerError)
 		return
 	}
 
-	// Mengupload file ke Google Drive
+	// Membuat service Google Drive
+	srv, err := getDriveService()
+	if err != nil {
+		http.Error(respw, "Gagal terhubung ke Google Drive", http.StatusInternalServerError)
+		return
+	}
+
+	// Membuka file yang diunggah untuk dibaca
+	fileUpload, err := os.Open(savePath)
+	if err != nil {
+		http.Error(respw, "Gagal membuka file", http.StatusInternalServerError)
+		return
+	}
+	defer fileUpload.Close()
+
+	// Membuat metadata file untuk Drive
 	driveFile := &drive.File{
-		Name:     handler.Filename,
-		MimeType: "application/pdf",
+		Name:    handler.Filename,
+		Parents: []string{"16H3QVeFv3lQ-VjxEfCEnuG_fKqwYE11R"}, // Sesuaikan ID folder di Google Drive
 	}
-	uploadedFile, err := driveService.Files.Create(driveFile).Media(file).Do()
+
+	// Unggah file ke Google Drive
+	uploadedFile, err := srv.Files.Create(driveFile).Media(fileUpload).Do()
 	if err != nil {
-		http.Error(w, "Gagal mengupload file ke Google Drive", http.StatusInternalServerError)
+		http.Error(respw, "Gagal mengunggah file", http.StatusInternalServerError)
 		return
 	}
 
-	// Menghubungkan ke MongoDB
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("MONGOSTRING")))
-	if err != nil {
-		http.Error(w, "Gagal menghubungkan ke MongoDB", http.StatusInternalServerError)
-		return
+	// Hapus file sementara dari server
+	os.Remove(savePath)
+
+	// Response sukses
+	resp := map[string]interface{}{
+		"message": "File berhasil diunggah",
+		"file_id": uploadedFile.Id,
 	}
-	defer client.Disconnect(ctx)
-
-	collection := client.Database("db_akreditasi").Collection("pdf_documents")
-
-	// Menyimpan metadata file PDF ke MongoDB
-	pdfDocument := model.PDFDocument{
-		ID:         primitive.NewObjectID(),
-		FileName:   handler.Filename,
-		FileID:     uploadedFile.Id,
-		UploadedBy: "user@example.com", // Bisa diganti dengan data user dari JWT atau token lainnya
-		UploadedAt: time.Now(),
-	}
-
-	_, err = collection.InsertOne(ctx, pdfDocument)
-	if err != nil {
-		http.Error(w, "Gagal menyimpan metadata dokumen", http.StatusInternalServerError)
-		return
-	}
-
-	// Mengembalikan respons sukses dengan metadata file
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(pdfDocument)
+	helper.WriteJSON(respw, http.StatusOK, resp)
 }
 
-// DownloadPDF handles the downloading of a PDF file from Google Drive
-func DownloadPDF(w http.ResponseWriter, r *http.Request) {
-	// Get the file ID from the URL parameters
-	fileID := r.URL.Query().Get("file_id")
-	if fileID == "" {
-		helper.ErrorResponse(w, r, http.StatusBadRequest, "Bad Request", "Missing file_id parameter")
-		return
-	}
+// Fungsi untuk mendownload file dari Google Drive
+func DownloadPDF(respw http.ResponseWriter, req *http.Request) {
+	fileId := req.URL.Query().Get("fileId") // Ambil fileId dari query parameter
 
-	// Connect to Google Drive using environment variable for credentials
-	ctx := context.Background()
-	credentials := os.Getenv("GOOGLE_CREDENTIALS")
-	if credentials == "" {
-		helper.ErrorResponse(w, r, http.StatusInternalServerError, "Internal Server Error", "Google credentials are missing")
-		return
-	}
-
-	// Initialize Google Drive service
-	driveService, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(credentials)))
+	// Membuat service Google Drive
+	srv, err := getDriveService()
 	if err != nil {
-		helper.ErrorResponse(w, r, http.StatusInternalServerError, "Internal Server Error", "Unable to connect to Google Drive")
+		http.Error(respw, "Gagal terhubung ke Google Drive", http.StatusInternalServerError)
 		return
 	}
 
-	// Retrieve the file from Google Drive
-	resp, err := driveService.Files.Get(fileID).Download()
+	// Mendapatkan file dari Google Drive
+	res, err := srv.Files.Get(fileId).Download()
 	if err != nil {
-		helper.ErrorResponse(w, r, http.StatusInternalServerError, "Internal Server Error", "Failed to download file from Google Drive")
+		http.Error(respw, "Gagal mengunduh file", http.StatusInternalServerError)
 		return
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	// Set headers for file download
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.pdf", fileID))
-	w.Header().Set("Content-Type", "application/pdf")
-
-	// Stream the file content to the client
-	_, err = io.Copy(w, resp.Body)
-	if err != nil {
-		helper.ErrorResponse(w, r, http.StatusInternalServerError, "Internal Server Error", "Failed to send file")
-	}
+	// Mengirim file sebagai respons
+	respw.Header().Set("Content-Disposition", "attachment; filename="+fileId)
+	respw.Header().Set("Content-Type", res.Header.Get("Content-Type"))
+	respw.WriteHeader(http.StatusOK)
+	io.Copy(respw, res.Body)
 }
