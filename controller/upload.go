@@ -16,7 +16,7 @@ import (
 // Fungsi untuk membuat service Google Drive
 func getDriveService() (*drive.Service, error) {
 	// Ambil isi GOOGLE_CREDENTIALS dari environment variable
-	credentialsJSON := os.Getenv("GOOGLE_CREDENTIALS")
+	credentialsJSON := os.Getenv("GOOGLE_CREDENTIALS_JSON")
 	if credentialsJSON == "" {
 		return nil, fmt.Errorf("GOOGLE_CREDENTIALS environment variable tidak ditemukan")
 	}

@@ -41,7 +41,7 @@ jobs:
             --runtime=go122 \
             --trigger-http \
             --timeout=540s \
-            --set-env-vars=MONGOSTRING="${{ secrets.MONGOSTRING }}",JWT_SECRET="${{ secrets.JWT_SECRET }}",PRIVATEKEY="${{ secrets.PRIVATEKEY }}",PUBLICKEY="${{ secrets.PUBLICKEY }}"
+            --set-env-vars=MONGOSTRING="${{ secrets.MONGOSTRING }}",JWT_SECRET="${{ secrets.JWT_SECRET }}",PRIVATEKEY="${{ secrets.PRIVATEKEY }}",PUBLICKEY="${{ secrets.PUBLICKEY }}",GOOGLE_CREDENTIALS_JSON="${{ secrets.GOOGLE_CREDENTIALS_JSON }}"
 
       - name: Cek eksistensi fungsi
         run: |
