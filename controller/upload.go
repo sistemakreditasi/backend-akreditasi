@@ -19,70 +19,73 @@ import (
 )
 
 func UploadPDF(w http.ResponseWriter, r *http.Request) {
-	// Parse form to retrieve uploaded file
-	err := r.ParseMultipartForm(10 << 20) // 10MB max
+	// Parse form untuk mengakses file yang diupload
+	err := r.ParseMultipartForm(10 << 20) // Max 10MB
 	if err != nil {
 		http.Error(w, "File terlalu besar", http.StatusBadRequest)
 		return
 	}
 
-	// Get file from form
+	// Mengambil file dari form
 	file, handler, err := r.FormFile("pdf")
 	if err != nil {
-		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
+		http.Error(w, "Error saat mengambil file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	// Google Drive credentials
+	// Mendapatkan kredensial Google dari environment variable
 	credentials := os.Getenv("GOOGLE_CREDENTIALS")
 	if credentials == "" {
-		http.Error(w, "Google credentials are missing", http.StatusInternalServerError)
+		http.Error(w, "Google credentials tidak ditemukan", http.StatusInternalServerError)
 		return
 	}
 
-	// Connect to Google Drive
+	// Inisialisasi layanan Google Drive
 	ctx := context.Background()
 	driveService, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(credentials)))
 	if err != nil {
-		http.Error(w, "Unable to connect to Google Drive", http.StatusInternalServerError)
+		http.Error(w, "Tidak bisa menghubungkan ke Google Drive", http.StatusInternalServerError)
 		return
 	}
 
-	// Upload file to Google Drive
-	driveFile := &drive.File{Name: handler.Filename, MimeType: "application/pdf"}
+	// Mengupload file ke Google Drive
+	driveFile := &drive.File{
+		Name:     handler.Filename,
+		MimeType: "application/pdf",
+	}
 	uploadedFile, err := driveService.Files.Create(driveFile).Media(file).Do()
 	if err != nil {
-		http.Error(w, "Failed to upload file to Google Drive", http.StatusInternalServerError)
+		http.Error(w, "Gagal mengupload file ke Google Drive", http.StatusInternalServerError)
 		return
 	}
 
-	// Connect to MongoDB
+	// Menghubungkan ke MongoDB
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("MONGOSTRING")))
 	if err != nil {
-		http.Error(w, "Failed to connect to MongoDB", http.StatusInternalServerError)
+		http.Error(w, "Gagal menghubungkan ke MongoDB", http.StatusInternalServerError)
 		return
 	}
 	defer client.Disconnect(ctx)
 
 	collection := client.Database("db_akreditasi").Collection("pdf_documents")
 
-	// Save PDF metadata to MongoDB
+	// Menyimpan metadata file PDF ke MongoDB
 	pdfDocument := model.PDFDocument{
 		ID:         primitive.NewObjectID(),
 		FileName:   handler.Filename,
 		FileID:     uploadedFile.Id,
-		UploadedBy: "user@example.com", // Bisa diganti dengan user dari JWT/token
+		UploadedBy: "user@example.com", // Bisa diganti dengan data user dari JWT atau token lainnya
 		UploadedAt: time.Now(),
 	}
 
 	_, err = collection.InsertOne(ctx, pdfDocument)
 	if err != nil {
-		http.Error(w, "Failed to save document metadata", http.StatusInternalServerError)
+		http.Error(w, "Gagal menyimpan metadata dokumen", http.StatusInternalServerError)
 		return
 	}
 
-	// Respond with uploaded file metadata
+	// Mengembalikan respons sukses dengan metadata file
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(pdfDocument)
