@@ -15,10 +15,17 @@ import (
 
 // Fungsi untuk membuat service Google Drive
 func getDriveService() (*drive.Service, error) {
+	// Ambil isi GOOGLE_CREDENTIALS dari environment variable
+	credentialsJSON := os.Getenv("GOOGLE_CREDENTIALS")
+	if credentialsJSON == "" {
+		return nil, fmt.Errorf("GOOGLE_CREDENTIALS environment variable tidak ditemukan")
+	}
+
+	// Buat Google Drive service menggunakan credentials dari environment variable
 	ctx := context.Background()
-	srv, err := drive.NewService(ctx, option.WithCredentialsFile("credentials.json"))
+	srv, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(credentialsJSON)))
 	if err != nil {
-		return nil, fmt.Errorf("tidak dapat membuat service: %v", err) // Ubah huruf kapital menjadi huruf kecil
+		return nil, fmt.Errorf("tidak dapat membuat service: %v", err)
 	}
 	return srv, nil
 }
